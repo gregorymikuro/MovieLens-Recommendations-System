@@ -12,7 +12,9 @@ Modeling
 Evaluation
 
 Deployment
-SVD App - https://movielenssvd.streamlit.app/
+
+* SVD App - https://movielenssvd.streamlit.app/
+* Hybrid Recommender App - https://movielenshybridrecommender.streamlit.app/
 
 Recommendations
 
