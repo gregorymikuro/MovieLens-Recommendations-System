@@ -1,4 +1,7 @@
 # __Building a Movie Recommender with the MovieLens Dataset__
+
+![alt text](image.png)
+
 Business Overview
 
 In the age of streaming services and an abundance of movie alternatives, customers frequently face the issue of finding films that match their preferences. This project aims to build a movie recommendation system that enhances the user’s movie-watching experience by suggesting films tailored to their preferences. The system will utilize machine learning algorithms and user data to deliver tailored movie suggestions based on ratings, viewing history, and preferences, resulting in growth and competitive advantage in the entertainment industry.
@@ -44,11 +47,90 @@ It describes 5-star ratings and free-text tagging activity from movieLens, a mov
 
 F. Maxwell Harper and Joseph A. Konstan. 2015. The MovieLens Datasets: History and Context. ACM Transactions on Interactive Intelligent Systems (TiiS) 5, 4: 19:1–19:19. https://doi.org/10.1145/2827872
 
-EDA
 
-Modeling
+### Data Cleaning
+Our data cleaning strategy aims to refine the dataset for subsequent analysis and modeling:
 
-Evaluation
+1.  **Merge `ratings` and `movies`:** We'll merge the `ratings` and `movies` DataFrames on the `movieId` column. This consolidation is essential for associating user ratings with specific movie titles and genres, enabling us to examine user preferences in relation to movie attributes and facilitating various recommendation strategies.
+
+2.  **Timestamp Removal:** The `timestamp` column, while potentially useful for temporal analysis, is not immediately relevant.  Therefore, we'll drop this column to reduce the dataset's dimensionality and computational burden.
+
+3.  **Duplicate Elimination:** We'll rigorously identify and remove duplicate entries within the merged DataFrame, ensuring each user-movie rating pair is unique. This step is crucial to prevent biases in subsequent analyses and models arising from duplicate ratings.
+
+4.  **Genre Transformation:** The `genres` column in the `movies` DataFrame contains multiple genres per movie separated by '|'. We'll split this column into a list of individual genres to enable genre-based analysis and filtering, as well as potential integration into content-based filtering strategies if desired later.
+
+5. **Title-Year Separation:** We will also extract the release year from the movie title and store it as a separate column for further analysis.
+ 
+6. **Bayesian Average Calculation:** We'll compute the Bayesian Average for each movie's rating.  This approach mitigates the inherent bias of simple average ratings, especially for movies with few ratings, by incorporating the global average rating and the average number of votes per movie. The Bayesian Average formula is:
+
+```
+Bayesian Average = ( (C * m) + (R * v) ) / (C + v)
+```
+
+where:
+
+*   R = average rating for the movie
+*   v = number of votes for the movie
+*   m = average rating across all movies
+*   C = average number of votes per movie across all movies
+
+By comparing the Bayesian Average with simple average ratings, we'll assess the impact of this adjustment on the perceived popularity of movies, particularly those with limited ratings. We'll visually represent this comparison to discern how the Bayesian Average smooths out the rating distribution.
+
+###EDA
+
+## Univariate Analysis
+### Top and Bottom Rated Movies & Users:
+
+Top Rated Movies:
+| title                              | avg_rating   |
+|:-----------------------------------|:-------------|
+| Shawshank Redemption, The          | 4.30266      |
+| Fight Club                         | 4.12902      |
+| Godfather, The                     | 4.12635      |
+| Star Wars: Episode IV - A New Hope | 4.10989      |
+| Pulp Fiction                       | 4.09966      |
+
+Bottom Rated Movies:
+| title                           | avg_rating   |
+|:--------------------------------|:-------------|
+| Wild Wild West                  | 2.83571      |
+| Coneheads                       | 2.89892      |
+| Batman & Robin                  | 2.91389      |
+| Anaconda                        | 2.94906      |
+| I Know What You Did Last Summer | 2.95827      |
+
+Top Raters (By Average Rating):
+| userId   | avg_rating   |
+|:---------|:-------------|
+| 549      | 3.94902      |
+...
+| 147      | 20           |
+| 189      | 20           |
+| 194      | 20           |
+| 207      | 20           |
+Output is truncated. 
+
+### Bivariate Analysis
+
+The MovieLensBivariateEDA class below performs bivariate analysis on the MovieLens dataset. It investigates the relationship between the average movie rating and two other variables: year of release and genre. This helps us understand how ratings vary depending on when a movie was released and what genre it belongs to. 
+
+analyze_year_vs_avg_rating() method calculates and visualizes the average rating of movies for each year using a line plot. It reveals trends in how movie ratings have evolved over time while analyze_genres_vs_avg_rating() method creates a new DataFrame with individual rows for each movie-genre combination along with their average ratings. It then uses a strip plot to visualize the distribution of average ratings across different genres, helping to identify if certain genres tend to receive higher or lower ratings on average.
+
+### Multvariate
+
+The `MultivariateAnalysis` class begins by initializing with a file path to the CSV data and the number of latent features for dimensionality reduction, which is set via `n_components`. It reads the data from the specified file using Pandas and prepares it for analysis. The `_prepare_data` method maps each movie ID to its title and index, then formats the data for the Surprise library, which is used to train the SVD model. The SVD model, initialized with the specified number of latent features, is trained on the prepared dataset. For similarity calculations, the `find_similar_movies` method computes the cosine similarity between the target movie vector and all other movie vectors. It then retrieves the top `k` most similar movies, excluding the target movie itself. The `plot_similarity_heatmap` method visualizes the similarity between the target movie and its top `k` similar movies by creating a heatmap, with movie titles as labels and similarity scores as annotations. 
+
+
+## Modeling
+
+The `CollaborativeFiltering` class is designed to recommend movies similar to a given movie based on collaborative filtering techniques. Upon initialization, it stores the user-item matrix \( \mathbf{X} \), movie titles, and various mappings for users and movies. The `find_similar_movies` method identifies similar movies using the specified distance metric, either 'cosine' or 'euclidean'. It transposes the user-item matrix \( \mathbf{X} \) and checks if the movie ID exists in the dataset. If valid, it retrieves the movie vector and applies the `NearestNeighbors` algorithm to find the closest neighbors. The cosine similarity or Euclidean distance is computed as:
+
+The `HybridRecommender` class integrates content-based and collaborative filtering approaches to provide movie recommendations. It initializes with a user-item matrix \( \mathbf{X} \), a genre matrix, and various mappings for users and movies, along with thresholds for user and movie ratings. The `movie_finder` method uses fuzzy matching to find the closest movie title to a given input. The `get_content_based_recommendations` method computes similarity scores between the target movie's genre vector and all other genre vectors using cosine similarity:
+
+The `hybrid_recommendations` method decides whether to use content-based or collaborative filtering based on the user's rating history or the movie's rating history. It applies filtering based on thresholds for user and movie ratings to choose the most appropriate recommendation approach.
+
+The hybrid recommendation system has successfully provided a diverse set of movie suggestions based on user history and content-based filtering. The recommendations, demonstrate the model's capability to blend collaborative and content-based approaches effectively. By integrating user preferences with movie attributes, the system enhances the relevance of suggested titles. This method not only addresses the cold start problem but also ensures that the recommendations cater to various user tastes.
+
 
 Deployment
 
@@ -78,4 +160,3 @@ In this project, we developed and evaluated several recommendation models based 
 4. **Scalability and Performance**: Explore methods to scale the recommendation system to handle larger datasets efficiently and improve computational performance.
 
 5. **Cross-Validation**: Implement cross-validation techniques to ensure robust model evaluation and mitigate potential biases in the training and testing processes.
-
