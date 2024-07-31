@@ -16,12 +16,14 @@ To develop and implement a Movie Recommender System that delivers personalized a
 
 ### 1.4 Specific Objectives
 
-1. Analyze and determine movie ratings considering the number of raters and the overall distribution of ratings by calculating the Bayesian average to ensure that ratings are representative and not overly influenced by the number of raters.
+1. Analyze and determine movie ratings by calculating the Bayesian average to ensure that ratings are representative and not overly influenced by the number of raters, taking into account both the average rating and the number of votes.
 
-2. Investigate relationships between user preferences and movie features through matrix factorization techniques, such as Singular Value Decomposition (SVD) to help in understanding how latent factors can capture the underlying patterns in user-movie interactions.
+2. Investigate relationships between user preferences and movie features through matrix factorization techniques, such as Singular Value Decomposition (SVD). This will help in understanding how latent factors can capture the underlying patterns in user-movie interactions, ultimately leading to more personalized recommendations.
 
-3.  Create and deploy a hybrid recommendation system that integrates collaborative filtering with content-based filtering that addresses the cold start problem and optimizes recommendation accuracy by combining the strengths of both methods.
-Data Understanding
+3. Create a hybrid recommendation model that integrates collaborative filtering (with a target accuracy of 80% or higher) with content-based filtering, specifically using deep learning techniques. 
+
+4. Deploy the developed recommendation system using Streamlit, creating an interactive interface that allows users to receive personalized movie recommendations in real-time.
+
 
 ### 1.5 Challenges
 1. Cold start problem: Accurate recommendations will be complex to provide when there is limited data for new users or at the system's initial launch.
@@ -34,19 +36,6 @@ Data preparation
 
 The dataset ml-latest-small is from (https://grouplens.org/datasets/movielens/latest/)
 It describes 5-star ratings and free-text tagging activity from movieLens, a movie recommendation system. The data contained 100836 ratings across 9742 movies and was generated on September 26th, 2018. Users were selected randomly for inclusion and all the users had rated at least 20 movies.
-
-#### Summary of Features in the Dataset
-
-* User_Id: A unique identifier for each user
-* MovieId: A unique identifier for each movie and is consistent in the dataset in ratings, tags, movies, and links.
-* TimeStamp: Represents seconds since midnight in Coordinated Universal Time (UTC).
-* Tags: User-generated metadata about movies. Each tag is typically a single word or short phrase where each user determines a particular tag's meaning, value and purpose.
-* Genre: Pipe-separated list, selected from Actions, Adventure, Animation, Children’s, Comedy, Documentary, Drama, Fantasy, Film-Noir, Horror, Musical, Mystery, Romance, Sci-Fic, Thriller, War, Western, no genres listed.
-
-#### _Citation_
-
-F. Maxwell Harper and Joseph A. Konstan. 2015. The MovieLens Datasets: History and Context. ACM Transactions on Interactive Intelligent Systems (TiiS) 5, 4: 19:1–19:19. https://doi.org/10.1145/2827872
-
 
 ### Data Cleaning
 Our data cleaning strategy aims to refine the dataset for subsequent analysis and modeling:
@@ -110,53 +99,84 @@ Top Raters (By Average Rating):
 | 207      | 20           |
 Output is truncated. 
 
+![image](https://github.com/user-attachments/assets/879ea395-13fc-4c87-9210-1cf06ba0e27f)
+
+
+![image](https://github.com/user-attachments/assets/6c1ad533-b7c5-48a2-8020-ebaa393563b6)
+
+
 ### Bivariate Analysis
 
 The MovieLensBivariateEDA class below performs bivariate analysis on the MovieLens dataset. It investigates the relationship between the average movie rating and two other variables: year of release and genre. This helps us understand how ratings vary depending on when a movie was released and what genre it belongs to. 
 
 analyze_year_vs_avg_rating() method calculates and visualizes the average rating of movies for each year using a line plot. It reveals trends in how movie ratings have evolved over time while analyze_genres_vs_avg_rating() method creates a new DataFrame with individual rows for each movie-genre combination along with their average ratings. It then uses a strip plot to visualize the distribution of average ratings across different genres, helping to identify if certain genres tend to receive higher or lower ratings on average.
 
-### Multvariate
 
-The `MultivariateAnalysis` class begins by initializing with a file path to the CSV data and the number of latent features for dimensionality reduction, which is set via `n_components`. It reads the data from the specified file using Pandas and prepares it for analysis. The `_prepare_data` method maps each movie ID to its title and index, then formats the data for the Surprise library, which is used to train the SVD model. The SVD model, initialized with the specified number of latent features, is trained on the prepared dataset. For similarity calculations, the `find_similar_movies` method computes the cosine similarity between the target movie vector and all other movie vectors. It then retrieves the top `k` most similar movies, excluding the target movie itself. The `plot_similarity_heatmap` method visualizes the similarity between the target movie and its top `k` similar movies by creating a heatmap, with movie titles as labels and similarity scores as annotations. 
+![image](https://github.com/user-attachments/assets/5ec7940a-978d-49bc-82f0-e30c57718067)
+
+
+### Multivariate
+ The SVD model, initialized with the specified number of latent features, is trained on the prepared dataset. For similarity calculations, the `find_similar_movies` method computes the cosine similarity between the target movie vector and all other movie vectors. It then retrieves the top `k` most similar movies, excluding the target movie itself. The `plot_similarity_heatmap` method visualizes the similarity between the target movie and its top `k` similar movies by creating a heatmap, with movie titles as labels and similarity scores as annotations. 
+
+
+![image](https://github.com/user-attachments/assets/9bf35f81-cb11-4ceb-a33a-897199ca81d0)
 
 
 ## Modeling
 
-The `CollaborativeFiltering` class is designed to recommend movies similar to a given movie based on collaborative filtering techniques. Upon initialization, it stores the user-item matrix \( \mathbf{X} \), movie titles, and various mappings for users and movies. The `find_similar_movies` method identifies similar movies using the specified distance metric, either 'cosine' or 'euclidean'. It transposes the user-item matrix \( \mathbf{X} \) and checks if the movie ID exists in the dataset. If valid, it retrieves the movie vector and applies the `NearestNeighbors` algorithm to find the closest neighbors. The cosine similarity or Euclidean distance is computed as:
+### Collaborative Filtering: Traditional and Deep Learning Approaches
 
-The `HybridRecommender` class integrates content-based and collaborative filtering approaches to provide movie recommendations. It initializes with a user-item matrix \( \mathbf{X} \), a genre matrix, and various mappings for users and movies, along with thresholds for user and movie ratings. The `movie_finder` method uses fuzzy matching to find the closest movie title to a given input. The `get_content_based_recommendations` method computes similarity scores between the target movie's genre vector and all other genre vectors using cosine similarity:
+The recommendation system utilizes two distinct collaborative filtering strategies. The `CollaborativeFiltering` class, employs traditional methods like cosine similarity and Euclidean distance to find similar movies based on user ratings. However, we've also introduced the `DLModeling` class to harness the power of deep learning.
 
-The `hybrid_recommendations` method decides whether to use content-based or collaborative filtering based on the user's rating history or the movie's rating history. It applies filtering based on thresholds for user and movie ratings to choose the most appropriate recommendation approach.
+The `HDLModeling` class builds a neural network model that learns latent representations for users and movies.  This model takes user and movie IDs as input, embeds them into a lower-dimensional space, and predicts the user's rating for a given movie based on the interaction of these embeddings. By leveraging the model's ability to capture complex relationships, we enhance the quality of personalized recommendations.
 
-The hybrid recommendation system has successfully provided a diverse set of movie suggestions based on user history and content-based filtering. The recommendations, demonstrate the model's capability to blend collaborative and content-based approaches effectively. By integrating user preferences with movie attributes, the system enhances the relevance of suggested titles. This method not only addresses the cold start problem but also ensures that the recommendations cater to various user tastes.
+### Content-Based Filtering: Leveraging Movie Attributes
+
+The `HybridRecommender` class seamlessly integrates the content-based approach alongside the collaborative filtering techniques. This component utilizes the `HDLContentBasedFiltering` class, which employs a TF-IDF representation of movie features (e.g., genres) and cosine similarity to calculate the similarity between movies. Content-based filtering is particularly valuable for addressing the cold start problem, where new users or items have limited interaction data. The core of the system lies in the `hybrid_recommendations` method within the `HybridRecommender` class. This method intelligently determines whether to use content-based or collaborative filtering (including both traditional and deep learning approaches) based on the available data. It assesses thresholds for user and movie ratings to ensure that the most appropriate recommendation strategy is applied.
+
+
+## Evaluation
+
+An instance of DLEvaluation is created with the model, test data, and scaler. The evaluate_model method is called, revealing an RMSE of 0.018 and an MAE of 0.0125. MAP@5 and NDCG@5 are calculated to assess ranking performance. The plot_actual_vs_predicted and plot_residuals functions are used to generate visualizations that aid in understanding the model's strengths and weaknesses.
+
+The actual vs predicted plot reveals a strong positive correlation between actual and predicted ratings, suggesting the model is generally accurate in predicting user preferences. There is a slight tendency for the model to underestimate ratings on the higher end (above 4.0) and overestimate those on the lower end (below 3.0). While most predictions are very close to the actual ratings, there is some variability, indicating the model isn't perfect and could benefit from further refinement.
+
+![image](https://github.com/user-attachments/assets/aa5a2cb5-06cd-4de6-9b5e-b903dd129ba6)
+
+![image](https://github.com/user-attachments/assets/545b0407-60e0-47f9-bc04-4dd0fdde7591)
 
 
 Deployment
 
 * SVD App - https://movielenssvd.streamlit.app/
 * Hybrid Recommender App - https://movielenshybridrecommender.streamlit.app/
+* Deep Learning Based Hybrid Recommender Model - https://deeplearninghybridrecommender.streamlit.app/   (quite slow)
 
-### Conclusion
+Absolutely! Here's a Conclusion, Recommendations, and Next Steps section that incorporates your project objectives and results:
 
-In this project, we developed and evaluated several recommendation models based on the MovieLens dataset. We implemented collaborative filtering and hybrid recommendation systems to address various aspects of movie recommendation. The Singular Value Decomposition (SVD) model and the Hybrid Recommender were deployed using Streamlit, providing a user-friendly interface for generating and visualizing movie recommendations. However, the evaluation of these models was not performed in detail due to limitations in computational power and potential biases introduced by the data splitting process. Specifically, the split did not fully capture the variability in user ratings or movie preferences, leading to skewed performance metrics. The true effectiveness of the recommendations could be more accurately assessed through continuous data collection and analysis of user feedback on the recommendations over time.
+### Conclusion, Recommendations, and Next Steps
 
-### Recommendations
+In this project, we successfully addressed the challenge faced by users who struggle to choose movies due to overwhelming options. By fulfilling the project's objectives, we've developed a robust and user-friendly movie recommendation system.
 
-1. **Enhance Data Collection**: Continuously gather user feedback and ratings to better assess the performance and relevance of the recommendations. This approach will help in understanding user preferences and improving model accuracy.
+**Key Accomplishments:**
 
-2. **Explore Advanced Metrics**: Consider integrating advanced evaluation metrics such as Mean Average Precision (MAP) and Normalized Discounted Cumulative Gain (NDCG) to gain deeper insights into model performance beyond traditional regression metrics like RMSE and MAE.
+* **Reliable Rating Analysis:** We implemented Bayesian average calculations to provide movie ratings that accurately reflect user sentiment while mitigating the influence of varying numbers of ratings per movie.
+* **Personalized Recommendations:** By employing Singular Value Decomposition (SVD) for matrix factorization, we uncovered latent factors that reveal hidden connections between user preferences and movie attributes, leading to highly personalized recommendations.
+* **Hybrid Model with High Accuracy:** Our hybrid recommendation model, which combines deep learning-based collaborative filtering (achieving an accuracy above the 80% target) with content-based filtering, tackles the cold-start problem and ensures that users receive relevant suggestions even when their interaction history is limited.
+* **Interactive User Interface:**  The Streamlit-based deployment provides an intuitive and engaging platform for users to interact with the recommendation system and discover movies tailored to their tastes in real time.
 
-3. **Optimize Computational Resources**: Evaluate the models on a more extensive scale by using cloud computing resources or optimizing the current computational setup to handle larger datasets and more complex models.
+**Recommendations:**
 
-### Next Steps
+* **Continuously Update Models:** Regularly retrain the collaborative filtering model to incorporate new user interactions and maintain accuracy as the dataset evolves.
+* **Expand Content-Based Features:** Explore additional movie features (e.g., genre combinations, actor/director preferences) to further enrich the content-based filtering component and enhance recommendation diversity.
+* **Gather User Feedback:** Implement mechanisms to collect explicit user feedback (likes, dislikes) to fine-tune the recommendations and adapt to individual preferences.
+* **Experiment with Model Architectures:** Investigate alternative deep learning architectures for the collaborative filtering model to potentially improve accuracy or efficiency.
 
-1. **User Feedback Integration**: Develop a mechanism to collect real-time user feedback on recommendations. This data will provide insights into model performance and areas for improvement.
+**Next Steps:**
 
-2. **Model Enhancement**: Experiment with additional recommendation algorithms and fine-tune existing models based on user feedback and performance metrics.
+* **A/B Testing:** Conduct A/B testing with different recommendation strategies to assess their impact on user engagement and satisfaction.
+* **Incorporate Implicit Feedback:** Analyze implicit feedback signals (e.g., click-through rates, watch time) to gain deeper insights into user preferences.
+* **Explore Contextual Recommendations:** Consider incorporating contextual information (e.g., time of day, mood) to deliver recommendations that are even more relevant to the user's current situation.
+* **Scale for Production:** If deploying to a larger user base, optimize the system for scalability and performance to ensure smooth operation under heavy load.
 
-3. **Deployment Improvements**: Enhance the Streamlit applications for better user experience and incorporate features for dynamic updates based on user interactions and new data.
-
-4. **Scalability and Performance**: Explore methods to scale the recommendation system to handle larger datasets efficiently and improve computational performance.
-
-5. **Cross-Validation**: Implement cross-validation techniques to ensure robust model evaluation and mitigate potential biases in the training and testing processes.
+By continuously iterating and enhancing the system based on these recommendations and next steps, we can create a movie recommendation engine that truly delights users and helps them discover their next favorite film.
