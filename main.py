@@ -1,27 +1,34 @@
 # Import Libraries
 import os
 import re
-import pandas as pd
-import matplotlib.pyplot as plt
-import seaborn as sns
-import numpy as np
-from surprise import Reader, Dataset, SVD
-from wordcloud import WordCloud
-from scipy import sparse
-from surprise import Reader, Dataset
-from sklearn.metrics.pairwise import cosine_similarity
-from fuzzywuzzy import process
-from sklearn.neighbors import NearestNeighbors
-from scipy.sparse import csr_matrix
-from sklearn.preprocessing import MultiLabelBinarizer
-from surprise.model_selection import cross_validate
-from sklearn.decomposition import TruncatedSVD
-from surprise.prediction_algorithms import SVD
-from surprise.prediction_algorithms import KNNWithMeans, KNNBasic, KNNBaseline
-from surprise.model_selection import GridSearchCV
 import warnings
+
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+import seaborn as sns
+import tensorflow as tf
+from fuzzywuzzy import process
+from scipy import sparse
+from scipy.sparse import csr_matrix
+from sklearn.decomposition import TruncatedSVD
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
+from sklearn.model_selection import train_test_split, GridSearchCV
+from sklearn.neighbors import NearestNeighbors
+from sklearn.preprocessing import MinMaxScaler, MultiLabelBinarizer
+from surprise import Reader, Dataset, SVD
+from surprise.model_selection import cross_validate
+from surprise.prediction_algorithms import SVD, KNNWithMeans, KNNBasic, KNNBaseline
+from tensorflow.keras.layers import Embedding, Input, Flatten, Dot, Dense
+from tensorflow.keras.models import Model
+from wordcloud import WordCloud
+
+# Suppress warnings
 warnings.filterwarnings('ignore', category=FutureWarning)
+
 import pickle
+
 
 
 class MovieLensDataExplorer:
@@ -620,6 +627,357 @@ class HybridRecommender:
             else:
                 print("Using collaborative filtering based on movie similarities.")
                 return self.get_collaborative_recommendations(movie_id, n_recommendations)
+
+
+class DLPreprocessing:
+    def __init__(self, filepath):
+        self.filepath = filepath
+
+    def load_data(self):
+        self.data = pd.read_csv(self.filepath)
+        return self.data
+
+    def preprocess_data(self):
+        self.data['userId'] = self.data['userId'].astype('category').cat.codes.values
+        self.data['movieId'] = self.data['movieId'].astype('category').cat.codes.values
+
+        self.user_count = self.data['userId'].nunique()
+        self.movie_count = self.data['movieId'].nunique()
+
+        # Normalizing the ratings
+        self.scaler = MinMaxScaler()
+        self.data['avg_rating'] = self.scaler.fit_transform(self.data[['avg_rating']])
+
+        # Splitting the data
+        self.train_data, self.test_data = train_test_split(self.data, test_size=0.2, random_state=42)
+
+        return self.train_data, self.test_data
+
+
+class DLModeling:
+    def __init__(self, user_count, movie_count):
+        self.user_count = user_count
+        self.movie_count = movie_count
+
+    def build_model(self):
+        user_input = Input(shape=(1,), name='user')
+        user_embedding = Embedding(self.user_count, 50, name='user_embedding')(user_input)
+        user_vec = Flatten(name='flatten_user')(user_embedding)
+
+        movie_input = Input(shape=(1,), name='movie')
+        movie_embedding = Embedding(self.movie_count, 50, name='movie_embedding')(movie_input)
+        movie_vec = Flatten(name='flatten_movie')(movie_embedding)
+
+        dot_user_movie = Dot(axes=1, name='dot_user_movie')([user_vec, movie_vec])
+
+        dense = Dense(1, activation='linear', name='output')(dot_user_movie)
+
+        self.model = Model(inputs=[user_input, movie_input], outputs=dense)
+        self.model.compile(optimizer='adam', loss='mean_squared_error',
+                           metrics=[tf.keras.metrics.RootMeanSquaredError()])
+
+    def train_model(self, train_data, epochs=10, batch_size=64):
+        self.model.fit([train_data['userId'], train_data['movieId']], train_data['avg_rating'],
+                       epochs=epochs, batch_size=batch_size, validation_split=0.2)
+
+    def get_model(self):
+        return self.model
+
+    def recommend_movies(self, user_id, top_k=5):
+        movie_ids = np.arange(self.movie_count)
+        user_ids = np.full(self.movie_count, user_id)
+        preds = self.model.predict([user_ids, movie_ids])
+        top_k_movie_indices = np.argsort(preds.flatten())[::-1][:top_k]
+        return top_k_movie_indices, preds.flatten()[top_k_movie_indices]
+
+
+class DLEvaluation:
+    def __init__(self, model, test_data, scaler):
+        self.model = model
+        self.test_data = test_data
+        self.scaler = scaler
+
+    def evaluate_model(self):
+        preds = self.model.predict([self.test_data['userId'], self.test_data['movieId']])
+        preds = self.scaler.inverse_transform(preds)
+
+        actuals = self.scaler.inverse_transform(self.test_data[['avg_rating']])
+
+        mse = tf.keras.losses.MeanSquaredError()(actuals, preds).numpy()
+        rmse = np.sqrt(mse)
+        mae = tf.keras.losses.MeanAbsoluteError()(actuals, preds).numpy()
+
+        print(f'RMSE: {rmse}, MAE: {mae}')
+        return rmse, mae
+
+    def mean_average_precision(self, k=5):
+        user_movie_matrix = csr_matrix(
+            (self.test_data['avg_rating'], (self.test_data['userId'], self.test_data['movieId'])))
+        num_users = user_movie_matrix.shape[0]
+        map_k = 0
+        for user in range(num_users):
+            actual_movies = user_movie_matrix[user].nonzero()[1]
+            if len(actual_movies) == 0:
+                continue
+            predicted_ratings = self.model.predict(
+                [np.full(self.model.input[0].shape[1], user), np.arange(self.model.input[1].shape[1])])
+            top_k_predicted = np.argsort(predicted_ratings)[::-1][:k]
+            hits = np.isin(top_k_predicted, actual_movies)
+            map_k += np.sum(hits) / k
+        map_k /= num_users
+        return map_k
+
+    def normalized_discounted_cumulative_gain(self, k=5):
+        def dcg(relevances, k):
+            relevances = np.asarray(relevances)[:k]
+            return np.sum((2 ** relevances - 1) / np.log2(np.arange(2, relevances.size + 2)))
+
+        user_movie_matrix = csr_matrix(
+            (self.test_data['avg_rating'], (self.test_data['userId'], self.test_data['movieId'])))
+        num_users = user_movie_matrix.shape[0]
+        ndcg_k = 0
+        for user in range(num_users):
+            actual_movies = user_movie_matrix[user].nonzero()[1]
+            if len(actual_movies) == 0:
+                continue
+            predicted_ratings = self.model.predict(
+                [np.full(self.model.input[0].shape[1], user), np.arange(self.model.input[1].shape[1])])
+            top_k_predicted = np.argsort(predicted_ratings)[::-1][:k]
+            relevances = np.isin(top_k_predicted, actual_movies)
+            ideal_relevances = np.ones(k)
+            ndcg_k += dcg(relevances, k) / dcg(ideal_relevances, k)
+        ndcg_k /= num_users
+        return ndcg_k
+
+    def plot_actual_vs_predicted(self):
+        preds = self.model.predict([self.test_data['userId'], self.test_data['movieId']])
+        preds = self.scaler.inverse_transform(preds).flatten()
+        actuals = self.scaler.inverse_transform(self.test_data[['avg_rating']]).flatten()
+
+        plt.figure(figsize=(10, 6))
+        plt.scatter(actuals, preds, alpha=0.2)
+        plt.xlabel('Actual Ratings')
+        plt.ylabel('Predicted Ratings')
+        plt.title('Actual vs. Predicted Ratings')
+        plt.show()
+
+    def plot_residuals(self):
+        preds = self.model.predict([self.test_data['userId'], self.test_data['movieId']])
+        preds = self.scaler.inverse_transform(preds).flatten()
+        actuals = self.scaler.inverse_transform(self.test_data[['avg_rating']]).flatten()
+        residuals = actuals - preds
+
+        plt.figure(figsize=(10, 6))
+        plt.scatter(actuals, residuals, alpha=0.2)
+        plt.xlabel('Actual Ratings')
+        plt.ylabel('Residuals')
+        plt.title('Residuals vs. Actual Ratings')
+        plt.axhline(y=0, color='r', linestyle='-')
+        plt.show()
+
+
+class HDLPreprocessing:
+    def __init__(self, filepath):
+        self.filepath = filepath
+
+    def load_data(self):
+        self.data = pd.read_csv(self.filepath)
+        return self.data
+
+    def preprocess_data(self):
+        # Encode userId and movieId
+        self.data['userId'] = self.data['userId'].astype('category').cat.codes.values
+        self.data['movieId'] = self.data['movieId'].astype('category').cat.codes.values
+
+        self.user_count = self.data['userId'].nunique()
+        self.movie_count = self.data['movieId'].nunique()
+
+        # Normalizing the ratings
+        self.scaler = MinMaxScaler()
+        self.data['avg_rating'] = self.scaler.fit_transform(self.data[['avg_rating']])
+
+        # TF-IDF Vectorization for movie genres
+        self.data['genres'] = self.data['genres'].fillna('')
+        tfidf = TfidfVectorizer(stop_words='english')
+        self.movie_tfidf_matrix = tfidf.fit_transform(self.data['genres'])
+
+        # Splitting the user data
+        self.train_data, self.test_data = train_test_split(self.data, test_size=0.2, random_state=42)
+
+        return self.train_data, self.test_data, self.movie_tfidf_matrix
+
+
+class HDLModeling:
+    def __init__(self, user_count, movie_count):
+        self.user_count = user_count
+        self.movie_count = movie_count
+
+    def build_model(self):
+        user_input = Input(shape=(1,), name='user')
+        user_embedding = Embedding(self.user_count, 50, name='user_embedding')(user_input)
+        user_vec = Flatten(name='flatten_user')(user_embedding)
+
+        movie_input = Input(shape=(1,), name='movie')
+        movie_embedding = Embedding(self.movie_count, 50, name='movie_embedding')(movie_input)
+        movie_vec = Flatten(name='flatten_movie')(movie_embedding)
+
+        dot_user_movie = Dot(axes=1, name='dot_user_movie')([user_vec, movie_vec])
+
+        dense = Dense(1, activation='linear', name='output')(dot_user_movie)
+
+        self.model = Model(inputs=[user_input, movie_input], outputs=dense)
+        self.model.compile(optimizer='adam', loss='mean_squared_error',
+                           metrics=[tf.keras.metrics.RootMeanSquaredError()])
+
+    def train_model(self, train_data, epochs=10, batch_size=64):
+        self.model.fit([train_data['userId'], train_data['movieId']], train_data['avg_rating'],
+                       epochs=epochs, batch_size=batch_size, validation_split=0.2)
+
+    def get_model(self):
+        return self.model
+
+    def recommend_movies(self, user_id, top_k=5):
+        movie_ids = np.arange(self.movie_count)
+        user_ids = np.full(self.movie_count, user_id)
+        preds = self.model.predict([user_ids, movie_ids])
+        top_k_movie_indices = np.argsort(preds.flatten())[::-1][:top_k]
+        return top_k_movie_indices, preds.flatten()[top_k_movie_indices]
+
+
+class HDLContentBasedFiltering:
+    def __init__(self, movie_tfidf_matrix, data):
+        self.movie_tfidf_matrix = movie_tfidf_matrix
+        self.data = data
+
+    def recommend_movies(self, movie_id, top_k=5):
+        cosine_sim = cosine_similarity(self.movie_tfidf_matrix, self.movie_tfidf_matrix)
+        sim_scores = list(enumerate(cosine_sim[movie_id]))
+        sim_scores = sorted(sim_scores, key=lambda x: x[1], reverse=True)
+        sim_scores = sim_scores[1:top_k + 1]
+        movie_indices = [i[0] for i in sim_scores]
+        return self.data['title'].iloc[movie_indices], sim_scores
+
+
+class HDLEvaluation:
+    def __init__(self, model, test_data, scaler):
+        self.model = model
+        self.test_data = test_data
+        self.scaler = scaler
+
+    def evaluate_model(self):
+        preds = self.model.predict([self.test_data['userId'], self.test_data['movieId']])
+        preds = self.scaler.inverse_transform(preds)
+
+        actuals = self.scaler.inverse_transform(self.test_data[['avg_rating']])
+
+        mse = tf.keras.losses.MeanSquaredError()(actuals, preds).numpy()
+        rmse = np.sqrt(mse)
+        mae = tf.keras.losses.MeanAbsoluteError()(actuals, preds).numpy()
+
+        print(f'RMSE: {rmse}, MAE: {mae}')
+        return rmse, mae
+
+    def mean_average_precision(self, k=5):
+        user_movie_matrix = csr_matrix(
+            (self.test_data['avg_rating'], (self.test_data['userId'], self.test_data['movieId'])))
+        num_users = user_movie_matrix.shape[0]
+        map_k = 0
+        for user in range(num_users):
+            actual_movies = user_movie_matrix[user].nonzero()[1]
+            if len(actual_movies) == 0:
+                continue
+            predicted_ratings = self.model.predict(
+                [np.full(self.model.input[0].shape[1], user), np.arange(self.model.input[1].shape[1])])
+            top_k_predicted = np.argsort(predicted_ratings)[::-1][:k]
+            hits = np.isin(top_k_predicted, actual_movies)
+            map_k += np.sum(hits) / k
+        map_k /= num_users
+        return map_k
+
+    def normalized_discounted_cumulative_gain(self, k=5):
+        def dcg(relevances, k):
+            relevances = np.asarray(relevances)[:k]
+            return np.sum((2 ** relevances - 1) / np.log2(np.arange(2, relevances.size + 2)))
+
+        user_movie_matrix = csr_matrix(
+            (self.test_data['avg_rating'], (self.test_data['userId'], self.test_data['movieId'])))
+        num_users = user_movie_matrix.shape[0]
+        ndcg_k = 0
+        for user in range(num_users):
+            actual_movies = user_movie_matrix[user].nonzero()[1]
+            if len(actual_movies) == 0:
+                continue
+            predicted_ratings = self.model.predict(
+                [np.full(self.model.input[0].shape[1], user), np.arange(self.model.input[1].shape[1])])
+            top_k_predicted = np.argsort(predicted_ratings)[::-1][:k]
+            relevances = np.isin(top_k_predicted, actual_movies)
+            ideal_relevances = np.ones(k)
+            ndcg_k += dcg(relevances, k) / dcg(ideal_relevances, k)
+        ndcg_k /= num_users
+        return ndcg_k
+
+    def plot_actual_vs_predicted(self):
+        preds = self.model.predict([self.test_data['userId'], self.test_data['movieId']])
+        preds = self.scaler.inverse_transform(preds).flatten()
+        actuals = self.scaler.inverse_transform(self.test_data[['avg_rating']]).flatten()
+
+        plt.figure(figsize=(10, 6))
+        plt.scatter(actuals, preds, alpha=0.2)
+        plt.xlabel('Actual Ratings')
+        plt.ylabel('Predicted Ratings')
+        plt.title('Actual vs. Predicted Ratings')
+        plt.show()
+
+    def plot_residuals(self):
+        preds = self.model.predict([self.test_data['userId'], self.test_data['movieId']])
+        preds = self.scaler.inverse_transform(preds).flatten()
+        actuals = self.scaler.inverse_transform(self.test_data[['avg_rating']]).flatten()
+        residuals = actuals - preds
+
+        plt.figure(figsize=(10, 6))
+        plt.scatter(actuals, residuals, alpha=0.2)
+        plt.xlabel('Actual Ratings')
+        plt.ylabel('Residuals')
+        plt.title('Residuals vs. Actual Ratings')
+        plt.axhline(y=0, color='r', linestyle='-')
+        plt.show()
+
+
+class HybridRecommendation:
+    def __init__(self, cf_model, cb_model, data, movie_tfidf_matrix):
+        self.cf_model = cf_model
+        self.cb_model = cb_model
+        self.data = data
+        self.movie_tfidf_matrix = movie_tfidf_matrix
+
+    def recommend(self, user_id=None, movie_title=None, top_k=5):
+        if user_id is not None:
+            movie_ids = np.arange(self.cf_model.input[1].shape[1])
+            user_ids = np.full(self.cf_model.input[0].shape[1], user_id)
+            preds = self.cf_model.predict([user_ids, movie_ids])
+            top_k_movie_indices = np.argsort(preds.flatten())[::-1][:top_k]
+            return self.data['title'].iloc[top_k_movie_indices].unique(), preds.flatten()[top_k_movie_indices][:top_k]
+        elif movie_title is not None:
+            movie_title = process.extractOne(movie_title, self.data['title'])[0]
+            movie_id = self.data[self.data['title'] == movie_title].index[0]
+            movie_vector = self.movie_tfidf_matrix[movie_id]
+            cosine_sim = cosine_similarity(movie_vector, self.movie_tfidf_matrix).flatten()
+            sim_scores = list(enumerate(cosine_sim))
+            sim_scores = sorted(sim_scores, key=lambda x: x[1], reverse=True)
+
+            unique_titles = set()
+            top_k_movie_indices = []
+            for i, score in sim_scores:
+                if len(unique_titles) >= top_k:
+                    break
+                title = self.data['title'].iloc[i]
+                if title not in unique_titles:
+                    unique_titles.add(title)
+                    top_k_movie_indices.append(i)
+
+            return self.data['title'].iloc[top_k_movie_indices], [sim_scores[i] for i in top_k_movie_indices]
+        else:
+            raise ValueError("Either user_id or movie_title must be provided.")
 
 
 
