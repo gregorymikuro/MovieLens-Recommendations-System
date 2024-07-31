@@ -135,6 +135,10 @@ The hybrid recommendation system has successfully provided a diverse set of movi
 
 ## Evaluation
 
+An instance of DLEvaluation is created with the model, test data, and scaler. The evaluate_model method is called, revealing an RMSE of 0.018 and an MAE of 0.0125. MAP@5 and NDCG@5 are calculated to assess ranking performance. The plot_actual_vs_predicted and plot_residuals functions are used to generate visualizations that aid in understanding the model's strengths and weaknesses.
+
+The actual vs predicted plot reveals a strong positive correlation between actual and predicted ratings, suggesting the model is generally accurate in predicting user preferences. There is a slight tendency for the model to underestimate ratings on the higher end (above 4.0) and overestimate those on the lower end (below 3.0). While most predictions are very close to the actual ratings, there is some variability, indicating the model isn't perfect and could benefit from further refinement.
+
 ![image](https://github.com/user-attachments/assets/aa5a2cb5-06cd-4de6-9b5e-b903dd129ba6)
 
 ![image](https://github.com/user-attachments/assets/545b0407-60e0-47f9-bc04-4dd0fdde7591)
