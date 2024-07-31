@@ -16,12 +16,14 @@ To develop and implement a Movie Recommender System that delivers personalized a
 
 ### 1.4 Specific Objectives
 
-1. Analyze and determine movie ratings considering the number of raters and the overall distribution of ratings by calculating the Bayesian average to ensure that ratings are representative and not overly influenced by the number of raters.
+1. Analyze and determine movie ratings by calculating the Bayesian average to ensure that ratings are representative and not overly influenced by the number of raters, taking into account both the average rating and the number of votes.
 
-2. Investigate relationships between user preferences and movie features through matrix factorization techniques, such as Singular Value Decomposition (SVD) to help in understanding how latent factors can capture the underlying patterns in user-movie interactions.
+2. Investigate relationships between user preferences and movie features through matrix factorization techniques, such as Singular Value Decomposition (SVD). This will help in understanding how latent factors can capture the underlying patterns in user-movie interactions, ultimately leading to more personalized recommendations.
 
-3.  Create and deploy a hybrid recommendation system that integrates collaborative filtering with content-based filtering that addresses the cold start problem and optimizes recommendation accuracy by combining the strengths of both methods.
-Data Understanding
+3. Create a hybrid recommendation model that integrates collaborative filtering (with a target accuracy of 80% or higher) with content-based filtering, specifically using deep learning techniques. 
+
+4. Deploy the developed recommendation system using Streamlit, creating an interactive interface that allows users to receive personalized movie recommendations in real-time.
+
 
 ### 1.5 Challenges
 1. Cold start problem: Accurate recommendations will be complex to provide when there is limited data for new users or at the system's initial launch.
@@ -116,7 +118,7 @@ The MovieLensBivariateEDA class below performs bivariate analysis on the MovieLe
 
 analyze_year_vs_avg_rating() method calculates and visualizes the average rating of movies for each year using a line plot. It reveals trends in how movie ratings have evolved over time while analyze_genres_vs_avg_rating() method creates a new DataFrame with individual rows for each movie-genre combination along with their average ratings. It then uses a strip plot to visualize the distribution of average ratings across different genres, helping to identify if certain genres tend to receive higher or lower ratings on average.
 
-### Multvariate
+### Multivariate
 
 The `MultivariateAnalysis` class begins by initializing with a file path to the CSV data and the number of latent features for dimensionality reduction, which is set via `n_components`. It reads the data from the specified file using Pandas and prepares it for analysis. The `_prepare_data` method maps each movie ID to its title and index, then formats the data for the Surprise library, which is used to train the SVD model. The SVD model, initialized with the specified number of latent features, is trained on the prepared dataset. For similarity calculations, the `find_similar_movies` method computes the cosine similarity between the target movie vector and all other movie vectors. It then retrieves the top `k` most similar movies, excluding the target movie itself. The `plot_similarity_heatmap` method visualizes the similarity between the target movie and its top `k` similar movies by creating a heatmap, with movie titles as labels and similarity scores as annotations. 
 
@@ -131,15 +133,22 @@ The `hybrid_recommendations` method decides whether to use content-based or coll
 
 The hybrid recommendation system has successfully provided a diverse set of movie suggestions based on user history and content-based filtering. The recommendations, demonstrate the model's capability to blend collaborative and content-based approaches effectively. By integrating user preferences with movie attributes, the system enhances the relevance of suggested titles. This method not only addresses the cold start problem but also ensures that the recommendations cater to various user tastes.
 
+## Evaluation
+
+![image](https://github.com/user-attachments/assets/aa5a2cb5-06cd-4de6-9b5e-b903dd129ba6)
+
+![image](https://github.com/user-attachments/assets/545b0407-60e0-47f9-bc04-4dd0fdde7591)
+
 
 Deployment
 
 * SVD App - https://movielenssvd.streamlit.app/
 * Hybrid Recommender App - https://movielenshybridrecommender.streamlit.app/
+* Deep Learning Based Hybrid Recommender Model - https://deeplearninghybridrecommender.streamlit.app/   (quite slow)
 
 ### Conclusion
 
-In this project, we developed and evaluated several recommendation models based on the MovieLens dataset. We implemented collaborative filtering and hybrid recommendation systems to address various aspects of movie recommendation. The Singular Value Decomposition (SVD) model and the Hybrid Recommender were deployed using Streamlit, providing a user-friendly interface for generating and visualizing movie recommendations. However, the evaluation of these models was not performed in detail due to limitations in computational power and potential biases introduced by the data splitting process. Specifically, the split did not fully capture the variability in user ratings or movie preferences, leading to skewed performance metrics. The true effectiveness of the recommendations could be more accurately assessed through continuous data collection and analysis of user feedback on the recommendations over time.
+In this project, we developed and evaluated several recommendation models based on the MovieLens dataset. We implemented collaborative filtering and hybrid recommendation systems to address various aspects of movie recommendation. The Singular Value Decomposition (SVD) model and the Hybrid Recommender were deployed using Streamlit, providing a user-friendly interface for generating and visualizing movie recommendations. However, the evaluation of these models was not performed in detail due to limitations in computational power and potential biases introduced by the data-splitting process. Specifically, the split did not fully capture the variability in user ratings or movie preferences, leading to skewed performance metrics. The true effectiveness of the recommendations could be more accurately assessed through continuous data collection and analysis of user feedback on the recommendations over time. 
 
 ### Recommendations
 
